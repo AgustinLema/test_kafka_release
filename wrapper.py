@@ -1,17 +1,19 @@
 import logging
-import sys
+import deployer
 
 from kafka import KafkaProducer, KafkaConsumer
 from json import dumps, loads
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
 class Wrapper():
-    def __init__(self, input_topic, output_topic):
+    def __init__(self, func, input_topic, output_topic):
         self.input_topic = input_topic
         self.output_topic = output_topic
+        self.func = func
         self.consumer, self.producer = self.initialize_kafka()
 
     def initialize_kafka(self):
@@ -24,9 +26,9 @@ class Wrapper():
         consumer = KafkaConsumer(
             self.input_topic,
             bootstrap_servers=['localhost:9092'],
-            auto_offset_reset='earliest',
+            auto_offset_reset='latest',
             enable_auto_commit=True,
-            group_id='my-group',
+            group_id='test',
             value_deserializer=lambda x: loads(x.decode('utf-8')))
 
         logging.info("Initializing producer")
@@ -41,25 +43,18 @@ class Wrapper():
         logging.info("Initializing processing")
 
         for message in self.consumer:
+            self.consumer.commit()
             logging.info("Got message from topic {}".format(self.input_topic))
-            response = self.process_message(message.value)
+            response = self.func(message.value)
             logging.info("Message processed, sending to topic {}".format(self.output_topic))
             self.producer.send(self.output_topic, value=response)
             self.producer.flush()
             logging.info("Message sent")
 
-    def process_message(self, message):
-        import wrapped.wrapped_script
-        return wrapped.wrapped_script.process(message)
 
-def main(wrapped_path, input_topic, output_topic):
-    sys.path.insert(0, wrapped_path)
-    w = Wrapper(input_topic, output_topic)
+def main(func, input_topic, output_topic):
+    w = Wrapper(func, input_topic, output_topic)
     w.start_processing()
 
 if __name__ == '__main__':
-    # TODO CHECK ARGUMENT COUNT
-    wrapped_path = sys.argv[0]
-    input_topic = sys.argv[1]
-    output_topic = sys.argv[2]
-    main(wrapped_path, input_topic, output_topic)
+    main(deployer.process, 'code_input', 'deployer_out')

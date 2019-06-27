@@ -18,4 +18,18 @@ def consume_message(topic, consumer_group):
         group_id=consumer_group,
         value_deserializer=lambda x: loads(x.decode('utf-8')))
     message = next(consumer)
+    consumer.commit()
     return message.value
+
+def consume_all(topic, consumer_group):
+    consumer = KafkaConsumer(
+        topic,
+        bootstrap_servers=['localhost:9092'],
+        auto_offset_reset='latest',
+        enable_auto_commit=True,
+        group_id=consumer_group,
+        consumer_timeout_ms=300,
+        value_deserializer=lambda x: loads(x.decode('utf-8')))
+    for i in consumer:
+        consumer.commit()
+        continue
